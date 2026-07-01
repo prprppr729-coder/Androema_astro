@@ -1,0 +1,182 @@
+--@name Astro Trooper V2 no blasters
+--@author AstricUnion
+--@shared
+
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/light.lua as light
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/guns.lua as guns
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/astrobase.lua as astrobase
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/ftimers.lua as ftimers
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
+--@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/ui.lua as ui
+--@include https://raw.githubusercontent.com/prprppr729-coder/Androema_astro/refs/heads/main/Cmesnoholos/Astro%20Trooper%20V2%20Model%20(no%20blasters).lua as astroholos
+
+-- Shared libs --
+require("astrobase")
+require("guns")
+require("light")
+local astrosounds = require("sounds")
+-----------------
+
+CHIPPOS = chip():getPos()
+
+if SERVER then
+    -- Server libs --
+    require("tweens")
+    ---@class FTimer
+    local FTimer = require("ftimers")
+    require("astroholos")
+    local hitbox = require("hitbox")
+    -----------------
+
+    -- States
+    local STATES = {
+        Idle = 0,
+        Dash = 1
+    }
+
+    -- Cooldowns
+    local can_dash = false
+
+
+    -- Create lights
+    createLight("Main", body.base[1], Vector(0, 0, 20), 80, 10, Color(255, 0, 0))
+    createLight("Underglow", body.base[1], Vector(0, 0, -10), 80, 10, Color(255, 0, 0))
+
+    -- Create bot parts --
+    local seat = prop.createSeat(CHIPPOS + Vector(0, 0, -6), Angle(), "models/nova/airboat_seat.mdl")
+    local size = Vector(35, 35, 20)
+    local headsize = Vector(12, 12, 12)
+    local body_hitbox = hitbox.cylinder(CHIPPOS + Vector(0, 0, 0), Angle(), size, true)
+    local head_hitbox = hitbox.cube(CHIPPOS + Vector(0, 0, 25), Angle(), headsize, true)
+    local astro = AstroBase:new(body_hitbox, head_hitbox, seat, 1000, Vector(10, 0, -5))
+
+    -- Start sound --
+    hook.add("SoundPreloaded", "StartSound", function(name, ply)
+        if name ~= "loop" then return end
+        astrosounds.play("loop", Vector(), astro.body, ply)
+    end)
+
+    -- Parenting --
+    body.base[1]:setParent(astro.body)
+    body.base[2]:setParent(body.base[1])
+    body.base[3]:setParent(body.base[1])
+    body.base[4]:setParent(body.base[1])
+    body.head:setParent(astro.head)
+    astro.head:setParent(body.base[1])
+    astro.body:setPos(astro.body:getPos() + Vector(0, 0, 35))
+    body.base[2]:setLocalAngularVelocity(Angle(0, 200, 0))
+    body.base[3]:setLocalAngularVelocity(Angle(0, -200, 0))
+    body.base[4]:setLocalAngularVelocity(Angle(0, 200, 0))
+
+    -- Unfreeze it
+    astro.body:setFrozen(false)
+
+
+    -- Idle animation --
+    local base_pos
+    local head_pos
+    IdleAnimation = FTimer:new(4, -1, {
+        [0] = function()
+            base_pos = body.base[1]:getLocalPos()
+            head_pos = astro.head:getLocalPos()
+        end,
+        ["0-1"] = function(_, _, fraction)
+            local rads = math.rad(360 * fraction)
+            local smoothed_x = math.sin(rads)
+            local smoothed_y = math.cos(rads)
+            body.base[1]:setLocalPos(base_pos + Vector(smoothed_x * 3, 0, smoothed_y * 3))
+            astro.head:setLocalPos(head_pos + Vector((1 - smoothed_x) * 1, 0, (1 - smoothed_y) * -1))
+        end,
+        ["0-0.5"] = function(_, _, fraction)
+            local smoothed = math.easeInOutSine(fraction)
+            body.base[1]:setLocalAngles(body.base[1]:getLocalAngles():setP(smoothed * 3))
+            astro.head:setLocalAngles(astro.head:getLocalAngles():setP(smoothed * 3))
+        end,
+        ["0.5-1"] = function(_, _, fraction)
+            local smoothed = math.easeInOutSine(1 - fraction)
+            body.base[1]:setLocalAngles(body.base[1]:getLocalAngles():setP(smoothed * 3))
+            astro.head:setLocalAngles(astro.head:getLocalAngles():setP(smoothed * 3))
+        end
+    })
+
+
+    local function createDashEffectHolo(pos, parent)
+        local holo = hologram.create(pos, Angle(), "models/hunter/plates/plate.mdl")
+        if !holo then return end
+        holo:setParent(parent)
+        holo:setTrails(32, 0, 2, "trails/laser", Color(255, 0, 0))
+        holo:setColor(Color(0, 0, 0, 0))
+        timer.simple(1.8, function()
+            holo:setParent(nil)
+            timer.simple(3, function()
+                holo:remove()
+            end)
+        end)
+        return holo
+    end
+
+
+    hook.add("AstroDeath", "death", function()
+        -- Delete idle animation
+        IdleAnimation:remove()
+        body.base[2]:setLocalAngularVelocity(Angle())
+        body.base[3]:setLocalAngularVelocity(Angle())
+        body.base[4]:setLocalAngularVelocity(Angle())
+
+        -- Remove hooks
+        hook.remove("PostEntityTakeDamage", "blasters")
+        hook.remove("AstroDeath", "death")
+        hook.remove("InputPressed", "Controls")
+
+        -- Remove lights
+        removeLight("Main")
+        removeLight("Underglow")
+
+        -- Stop loop
+        astrosounds.stop("loop")
+    end)
+
+else
+    -- Client libs --
+    require("ui")
+    -----------------
+
+    -- Preload sounds
+    local sounds = "https://raw.githubusercontent.com/AstricUnion/AstroBots/refs/heads/main/sounds/astrotrooper/"
+    astrosounds.preload("loop", 1, true, true, sounds .. "Idle.mp3")
+    astrosounds.preload("dash", 1, false, false, sounds .. "Dash.mp3")
+    astrosounds.preload("predash", 1, false, false, sounds .. "Prepdash.mp3")
+
+    local function createHud(_, body)
+        local healthBar
+
+        hook.add("DrawHUD", "", function()
+            local sw, sh = render.getGameResolution()
+
+            ---- Aim ----
+            render.drawCircle(sw / 2, sh / 2, 1)
+
+            ---- HP bar ----
+            local health = body:getHealth() / 1000
+            if not healthBar then
+                healthBar = Bar:new(sw / 2 - 100, sh * 0.8, 200, 30, 1)
+                    :setLabelLeft("HP")
+            end
+            local current = healthBar.percent
+            healthBar:setPercent(health)
+                :setLabelRight(tostring(body:getHealth()) .. "%")
+                :setBarColor(Color(255, 255, 255, 255) * Color(1, current, current, 1))
+            healthBar:draw()
+        end)
+    end
+
+    local function removeHud()
+        hook.remove("DrawHUD", "")
+    end
+
+    hook.add("AstroEntered", "", createHud)
+    hook.add("AstroLeft", "", removeHud)
+
+end
