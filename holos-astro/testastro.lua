@@ -112,10 +112,9 @@ body = {
     }
 }
 
--- В самом конце файла astro_striker_holos.lua должно быть так:
 return {
-    base = base,         -- таблица/массив базы робота
-    head = head,         -- таблица/голова робота
-    leftarm = leftarm,   -- левая рука
-    rightarm = rightarm  -- правая рука
+    base = my_base_var,         -- Как называется ваша база в файле холтограм
+    head = my_head_var,         -- Как называется голова
+    leftarm = my_left_arm_var,   -- Как называется левая рука (например, left_arm?)
+    rightarm = my_right_arm_var  -- Как называется правая рука (например, right_arm?)
 }
