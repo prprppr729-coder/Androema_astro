@@ -112,10 +112,10 @@ body = {
     }
 }
 
--- Пример того, как должен заканчиваться файл astro_striker_holos.lua на GitHub:
+-- В самом конце файла astro_striker_holos.lua должно быть так:
 return {
-    base = base,         -- Название переменной вашей базы
-    head = head,         -- Название переменной головы
-    leftarm = leftarm,   -- Название левой руки
-    rightarm = rightarm  -- Название правой руки
+    base = base,         -- таблица/массив базы робота
+    head = head,         -- таблица/голова робота
+    leftarm = leftarm,   -- левая рука
+    rightarm = rightarm  -- правая рука
 }
